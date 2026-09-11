@@ -104,12 +104,12 @@ services:
       - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - taskflow-net
-    depends_on:
-      - users
-      - tasks
-      - logs
-      - frontend-react
-      - frontend-angular
+    # depends_on:
+      # - users
+      # - tasks
+      # - logs
+      # - frontend-react
+      # - frontend-angular
 
   # ----------------------------------------------------------
   # Backends + frontends (Fases 2-6). Sin ports públicos:
