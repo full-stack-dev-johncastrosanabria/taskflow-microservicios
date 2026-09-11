@@ -5,28 +5,38 @@ App de tareas distribuida en microservicios: cada stack hace lo que mejor sabe, 
 ## Arquitectura
 
 ```txt
-Frontend (React / Angular)
-│
-API Gateway (Nginx :8080)
-├── /api/users/* → .NET 10 + SQL Server (auth, JWT)
-├── /api/tasks/* → Express + Postgres (CRUD tareas)
-└── /api/logs/*  → Flask + Mongo (auditoría)
+Gateway (Nginx :8080)
+├── /               → React (frontend-react:80)
+├── /angular/       → Angular (frontend-angular:80)
+├── /api/users/*    → .NET 10 + SQL Server (auth, JWT)
+├── /api/tasks/*    → Express + Postgres (CRUD tareas)
+└── /api/logs/*     → Flask + Mongo (auditoría)
 ```
 
 ## Servicios
 
-| Servicio | Stack | Base de datos | Puerto interno |
-| -------- | ----- | ------------- | -------------- |
-| users | .NET 10 + EF Core + Minimal APIs | SQL Server | 5001 |
-| tasks | Express + TypeScript + Prisma | PostgreSQL | 5002 |
-| logs | Flask + PyMongo | MongoDB | 5003 |
+| Servicio | Stack | Puerto interno |
+| -------- | ----- | -------------- |
+| users | .NET 10 + EF Core + Minimal APIs | 5001 |
+| tasks | Express + TypeScript + Prisma | 5002 |
+| logs | Flask + PyMongo + Gunicorn | 5003 |
+| frontend-react | React (Vite) + Nginx | 80 |
+| frontend-angular | Angular + Nginx | 80 |
 
 > **Regla de oro:** la única entrada pública es el gateway (:8080).
 
-## Levantar infraestructura
+## Dockerfiles
+
+- `services/users/Dockerfile` (.NET 10, `Users.dll`)
+- `services/tasks/Dockerfile` (Node 22, `dist/index.js`)
+- `services/logs/Dockerfile` (Python 3.12, `app:app`)
+- `frontend/react/Dockerfile` y `frontend/angular/Dockerfile` (build Node → Nginx)
+
+## Uso
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+curl localhost:8080/healthz
 ```
 
 ## Roadmap

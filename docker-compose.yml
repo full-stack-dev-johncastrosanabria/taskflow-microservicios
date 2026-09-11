@@ -1,0 +1,176 @@
+# ============================================================
+# TaskFlow Microservicios — Fase 1: Infraestructura base
+# ------------------------------------------------------------
+# Solo BDs + Gateway. Los microservicios (users/tasks/logs)
+# se agregan en Fase 2-4 (ver bloque comentado al final).
+#
+# Regla de oro: la única entrada pública es el gateway (:8080).
+# Las BDs exponen puertos al host solo para desarrollo/debug.
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # SQL → backend users (.NET 10 + EF Core, :5001)
+  # M3 (arm64): SQL Server 2022 solo es amd64 → emulado, lento.
+  # Se usa Azure SQL Edge (arm64 nativo, compatible EF Core).
+  # Prod amd64: cambia image a mcr.microsoft.com/mssql/server:2022-latest
+  # y agrega platform: linux/amd64.
+  # ----------------------------------------------------------
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    container_name: taskflow-sqlserver
+    restart: unless-stopped
+    environment:
+      # Obligatorio para aceptar la licencia en contenedor.
+      ACCEPT_EULA: "Y"
+      # Edge acepta SA_PASSWORD; se setean ambas por compatibilidad.
+      SA_PASSWORD: "${MSSQL_SA_PASSWORD:-TaskFl0w!2026}"
+      # El password debe cumplir política fuerte (8+ chars, mayúscula,
+      # minúscula, número y símbolo). Usar .env en real: ${MSSQL_SA_PASSWORD}
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-TaskFl0w!2026}"
+      MSSQL_PID: "Developer"
+    ports:
+      # Host:Contenedor. 1433 es el puerto default de SQL Server.
+      - "1433:1433"
+    volumes:
+      # Persistencia de /var/opt/mssql (datos + log).
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - taskflow-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ----------------------------------------------------------
+  # PostgreSQL 17 → backend tasks (Express + Prisma, :5002)
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    container_name: taskflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-taskflow123}"
+      POSTGRES_DB: tasks_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - taskflow-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow -d tasks_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # MongoDB 7 → backend logs (Flask + PyMongo, :5003)
+  # ----------------------------------------------------------
+  mongo:
+    image: mongo:7
+    container_name: taskflow-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - taskflow-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ----------------------------------------------------------
+  # API Gateway (Nginx :8080) → única entrada pública.
+  # Enruta: /api/users/* → :5001, /api/tasks/* → :5002,
+  #         /api/logs/*  → :5003 (ver gateway/nginx.conf).
+  # ----------------------------------------------------------
+  gateway:
+    image: nginx:alpine
+    container_name: taskflow-gateway
+    restart: unless-stopped
+    ports:
+      # 8080 en host para no chocar con un nginx local en 80.
+      - "8080:80"
+    volumes:
+      # Monta tu conf como default.conf (solo lectura).
+      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - taskflow-net
+    depends_on:
+      - users
+      - tasks
+      - logs
+      - frontend-react
+      - frontend-angular
+
+  # ----------------------------------------------------------
+  # Backends + frontends (Fases 2-6). Sin ports públicos:
+  # solo el gateway expone :8080.
+  # ----------------------------------------------------------
+  users:
+    build: ./services/users # .NET 10 + EF Core
+    container_name: taskflow-users
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__SqlServer: "Server=sqlserver,1433;Database=users_db;User Id=sa;Password=${MSSQL_SA_PASSWORD:-TaskFl0w!2026};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-cambia-esto-en-.env}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks: [taskflow-net]
+
+  tasks:
+    build: ./services/tasks # Express + Prisma
+    container_name: taskflow-tasks
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://taskflow:${POSTGRES_PASSWORD:-taskflow123}@postgres:5432/tasks_db"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [taskflow-net]
+
+  logs:
+    build: ./services/logs # Flask + PyMongo
+    container_name: taskflow-logs
+    restart: unless-stopped
+    environment:
+      MONGO_URI: "mongodb://mongo:27017/taskflow_logs"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks: [taskflow-net]
+
+  frontend-react:
+    build: ./frontend/react
+    container_name: taskflow-frontend-react
+    restart: unless-stopped
+    networks: [taskflow-net]
+
+  frontend-angular:
+    build: ./frontend/angular
+    container_name: taskflow-frontend-angular
+    restart: unless-stopped
+    networks: [taskflow-net]
+
+# ------------------------------------------------------------
+# Red interna: todos los contenedores se resuelven por nombre
+# (ej: el gateway usa http://tasks:5002, no localhost).
+# ------------------------------------------------------------
+networks:
+  taskflow-net:
+    driver: bridge
+
+# Volúmenes nombrados = datos sobreviven a `docker compose down`.
+volumes:
+  sqlserver-data:
+  postgres-data:
+  mongo-data:
