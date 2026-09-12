@@ -39,11 +39,17 @@
 - `.env.example` sí se commitea, `.env` nunca
 - `pnpm prisma migrate dev --name init` → `prisma/migrations/…_init/`
 
-## 8. Verificación
-- `npx tsc --noEmit` limpio
+## 8. `src/prisma.ts` (singleton con adapter)
+- Imports **nombrados**: `import { PrismaClient }`, `import { PrismaPg }`
+  (los `import X from` por defecto fallan: TS2709/TS2351 en TS ≤6)
+- Fail-fast si falta `DATABASE_URL`; singleton vía `globalThis` para `tsx watch`
+
+## 9. Verificación
+- `npx tsc --noEmit` limpio (vale en TS 6 y 7)
 - `pnpm dev` + `curl localhost:5002/health`
 - Migración aplicada, DB en sync
 
 ## Pendiente
 - Migrar `Dockerfile` de `npm ci` a pnpm (`pnpm-lock.yaml` + copiar `prisma.config.ts`)
-- `src/prisma.ts` (singleton `PrismaClient({ adapter })`) + CRUD (Fase 2)
+- CRUD (Fase 2)
+- Fail-fast si falta `DATABASE_URL`; singleton vía `globalThis` para `tsx watch`
