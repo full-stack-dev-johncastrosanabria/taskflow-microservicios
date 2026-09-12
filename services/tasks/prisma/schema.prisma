@@ -1,0 +1,20 @@
+
+generator client { // le dice a Prisma que genere el cliente TypeScript (@prisma/client).
+    provider = "prisma-client-js"
+}
+
+datasource db { // Solo declara cómo conectar (la URL real va en .env, nunca hardcodeada).
+    provider = "postgresql"
+}
+
+model Task {
+    id          String      @id @default(cuid())
+    title       String
+    isComplete  Boolean     @default(false)
+    userId      String
+    tags        String[]
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("tasks") // @@map("tasks") nombra la tabla 
+}
