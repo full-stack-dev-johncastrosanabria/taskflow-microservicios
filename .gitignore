@@ -1,3 +1,7 @@
 .vscode
-services/tasks/node_modules
-services/tasks/.env
+**/node_modules/
+**/.venv/
+**/.env
+**/__pycache__/
+**/*.pyc
+**/*.pyo
