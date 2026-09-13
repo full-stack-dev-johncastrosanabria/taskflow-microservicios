@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../prisma.js"; // .js del import local — regla del node16
+import { notifyLog } from "../logs.js";
 
 export const tasksRouter = Router();
 
@@ -45,7 +46,14 @@ tasksRouter.post("/", async (req: Request, res: Response) => {
         isComplete: isComplete === true,
       },
     });
-
+    
+    // Auditoría: no bloquea la respuesta. Si Flask está caído, solo deja un warn.
+    void notifyLog("task.created", {
+      userId: task.userId,
+      taskId: task.id,
+      metadata: { title: task.title },
+    });
+    
     res.status(201).json(task);
 
 });
@@ -76,16 +84,33 @@ tasksRouter.patch("/:id", async (req: Request<{id: string}>, res: Response) => {
         ...(Array.isArray(tags) ? { tags: tags.filter((t): t is string => typeof t === "string") } : {}),
       },
     });
+
+    void notifyLog("task.updated", {
+      userId: task.userId,
+      taskId: task.id,
+      metadata: { title, isComplete, tags },
+    });
+
     res.json(task);
+
   } catch {
+
     res.status(404).json({ error: "task not found" });
+
   }
 });
 
 // Borra. 204 siempre (idempotente), 404 si nunca existió.
 tasksRouter.delete("/:id", async (req: Request<{ id: string }>, res: Response) => {
+  // Guardamos el id antes de borrar para poder auditarlo.
+  const taskId = req.params.id;
   try {
-    await prisma.task.delete({ where: { id: req.params.id } });
+    const task = await prisma.task.delete({ where: { id: taskId } });
+    void notifyLog("task.deleted", {
+      userId: task.userId,
+      taskId,
+      metadata: { title: task.title },
+    });
     res.status(204).send();
   } catch {
     res.status(404).json({ error: "task not found" });

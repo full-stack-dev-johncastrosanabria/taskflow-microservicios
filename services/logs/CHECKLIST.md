@@ -44,10 +44,18 @@
 - `action: str` (ej: `task.created`) · `userId?: str` · `taskId?: str`
 - `timestamp: datetime` (servidor) · `metadata?: object`
 
-## 6. Verificación
-- `curl /health` → `POST` (`201`) → `GET` (`200`) → Compass muestra `taskflow_logs`
+## 7. Verificación — 3a (servicio solo)
+- `curl localhost:5003/health` → `200`
+- `curl -X POST localhost:5003/logs -H 'Content-Type: application/json' \
+    -d '{"action":"task.created","userId":"u1","taskId":"abc","metadata":{"title":"x"}}'` → `201`
+- `curl "localhost:5003/logs?limit=5"` → `200` + doc con `_id` str + `timestamp` ISO
+- Compass muestra `taskflow_logs.logs` al primer insert
 - `docker compose build logs` compila
 
-## Pendiente
-- Express → Flask: notify en crear/editar/borrar (Fase 3b)
-- Gateway ya enruta `/api/logs/` (verificado en Fase 1)
+## 8. Fase 3b — integración tasks → logs
+- Validado en `services/tasks/CHECKLIST.md` §10–§11 (dos dev + curls + resiliencia).
+- Limpieza: `db.logs.deleteOne({ taskId: null })` borra el doc basura del bug
+  `JSON.stringify({ action, data })` (anidaba en `data`).
+
+## 9. Pendiente
+- Gateway `/api/logs/` ya enruta (Fase 1) — probar con `curl localhost:8080/api/logs/` cuando los servicios vayan en Docker
