@@ -41,9 +41,9 @@ curl localhost:8080/healthz
 
 ## Roadmap
 
-- [ ] Fase 1: Infraestructura (3 BDs + Nginx)
-- [ ] Fase 2: tasks (Express + Prisma)
-- [ ] Fase 3: logs (Flask)
+- [x] Fase 1: Infraestructura (3 BDs + Nginx)
+- [x] Fase 2: tasks (Express + Prisma)
+- [x] Fase 3: logs (Flask) + 3b tasks → logs (auditoría)
 - [ ] Fase 4: users (.NET + JWT)
 - [ ] Fase 5: Frontend React
 - [ ] Fase 6: Frontend Angular
