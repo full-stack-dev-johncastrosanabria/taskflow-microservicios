@@ -56,11 +56,35 @@
 - Body como `unknown` + type-guards (`t is string`); PATCH con spreads condicionales
 - `update`/`delete` de id inexistente → `catch` → `404`
 
-## 10. Verificación
+## 10. Fase 3b — notify tasks → logs
+- `src/logs.ts`: `LOGS_URL` con default `http://localhost:5003` (local) /
+  `http://logs:5003` (Docker). `notifyLog(action, { userId, taskId, metadata })`
+  con `fetch` + `try/catch` que solo hace `warn` — nunca rompe la petición.
+- Patrón fire-and-forget: en rutas `void notifyLog(...)` antes de responder.
+- `.env` + `.env.example`: agregar `LOGS_URL`.
+- Rutas: `POST` → `task.created`, `PATCH` → `task.updated`, `DELETE` → `task.deleted`
+  (lecturas no auditan).
+
+## 11. Verificación — 3b (dos dev a la vez)
+- Terminal A: `cd services/logs && flask --app app run --host 0.0.0.0 --port 5003`
+- Terminal B: `cd services/tasks && pnpm dev`
+- Terminal C:
+  ```
+  curl localhost:5002/health && curl localhost:5003/health
+  curl -X POST localhost:5002/tasks -H 'Content-Type: application/json' \
+    -d '{"title":"Demo 3b","userId":"u1"}' # copia id
+  curl "localhost:5003/logs?limit=5"       # → action task.created
+  curl -X PATCH localhost:5002/tasks/<id> -H 'Content-Type: application/json' \
+    -d '{"isComplete":true}'
+  curl -X DELETE localhost:5002/tasks/<id> -i # → 204
+  curl "localhost:5003/logs?limit=10"      # → 3 docs (created/updated/deleted)
+  # resiliencia: apaga Flask y repite POST → tasks sigue en 201, solo warn en consola
+  ```
+
+## 12. Verificación general
 - `npx tsc --noEmit` limpio (vale en TS 6 y 7)
 - `pnpm dev` + `curl /health` → `POST` (`201`) → `GET`/`PATCH` (`200`) → `DELETE` (`204`) + casos `400`/`404`
 - Migración aplicada, DB en sync
 
 ## Pendiente
 - Migrar `Dockerfile` de `npm ci` a pnpm (`pnpm-lock.yaml` + copiar `prisma.config.ts`)
-- Fase 3: logs (Flask) + notify Express → Flask
